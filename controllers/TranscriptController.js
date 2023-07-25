@@ -13,15 +13,32 @@ const extractVideoId = (url) => {
 async function fetchVideoInfo(videoUrl) {
   try {
     const info = await ytdl.getInfo(videoUrl);
+    if (!info || !info.videoDetails || !info.videoDetails.title) {
+      console.log('YouTube video information not found:', info);
+      throw new Error('YouTube video information not found.');
+    }
     return { title: info.videoDetails.title };
   } catch (error) {
-    throw new Error('Error fetching video information.');
+    if (error.message === 'Video unavailable') {
+      console.error('YouTube video is unavailable:', error.message);
+      throw new Error('YouTube video is unavailable.');
+    } else {
+      console.error('Error fetching video information:', error.message);
+      throw new Error('Error fetching video information.');
+    }
   }
 }
+
 
 // Fetch video transcript using the youtube-captions-scraper package
 async function fetchVideoTranscript(videoId) {
   try {
+
+    if (!videoId) {
+      // Return an error message if the videoId is null (invalid video URL)
+      return { transcript: null, error: 'Invalid YouTube video URL.' };
+    }
+
     const captions = await getSubtitles({
       videoID: videoId,
       lang: 'en', // English captions
@@ -65,7 +82,9 @@ const createVideoTranscript = async (req, res) => {
     }
 
     const videoId = extractVideoId(videoUrl);
+
     const existingVideo = await TranscriptModel.findOne({ videoId });
+    
 
     if (existingVideo) {
       res.json({
@@ -75,6 +94,13 @@ const createVideoTranscript = async (req, res) => {
     } else {
       const videoInfo = await fetchVideoInfo(videoUrl);
       const transcriptData = await fetchVideoTranscript(videoId);
+
+       // Check if the transcriptData has an error property (videoId is invalid)
+      //  if (transcriptData.error) {
+      //   return res.status(400).json({
+      //     error: transcriptData.error,
+      //   });
+      // }
 
       // Save video details in MongoDB
       const video = new TranscriptModel({
